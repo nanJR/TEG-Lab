@@ -1,6 +1,6 @@
 # Peltier module as a thermoelectric generator (TEG)
 
-First-year physics PBL (RVCE, PY211IB): characterising a TEC1-12706 Peltier module run backwards as a generator, and checking a simple circuit model of it against measurement.
+Characterising a TEC1-12706 Peltier module run backwards as a generator, and checking a simple circuit model of it against measurement.
 
 > **Status (Oct 2026):** the hardware has not been built yet. The Arduino sketch has **not been compiled or run** on a board. The Python scripts have only been tested on **simulated** data. The numbers and graphs in this repo are from that simulation, not from an experiment.
 
@@ -148,15 +148,3 @@ python python/teg_analysis.py --demo
 
 After the PBL, the plan is to try a thermal paste test (dry vs paste, using a third sensor in the bath) and to show the Peltier back-action under load. Details and references are in [docs/future-work.md](docs/future-work.md).
 
-## Related material
-
-- Lab manual (online, with diagrams): https://claude.ai/artifact/HGz8wXLUC6EcZ9fcEQRxs8
-- Debrief slide deck: https://claude.ai/artifact/86D1e75L3bMZF6vHZRAAnr
-- Interactive 3D model: https://claude.ai/artifact/P9GjzBedWfYpcxiLDHwhjK (a copy is in [`3d-model/`](3d-model/index.html))
-- Research notes: https://claude.ai/artifact/JisvQtxGhJHwuhqXT9F6dQ
-
-These links are private to the author unless shared.
-
-## AI assistance
-
-This project was built with AI assistance. The Arduino sketch, the Python scripts, the lab manual text, the documentation, the 3D model, the research summary and this README were drafted with Claude (Anthropic) and reviewed by the author. The experimental design choices and the final report are the author's responsibility, and all data in this repository so far is simulated.
