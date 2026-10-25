@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TEG Bench Model</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a lab-bench viewport first, controls under it, then the build stack read bottom to top. */
+  :root {
+    --bg: #f3f5f4;
+    --surface: #ffffff;
+    --fg: #17201d;
+    --muted: #5b6863;
+    --line: #d5dcd9;
+    --hot: #c8501e;
+    --cold: #2a72b8;
+    --accent: #1f7a5c;
+    --scene: #e6ebe9;
+    --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121816; --surface: #1a2220; --fg: #e5ece9; --muted: #9aa8a2; --line: #2e3a36;
+      --hot: #f07a45; --cold: #6aa8e8; --accent: #4cc497; --scene: #1c2422; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121816; --surface: #1a2220; --fg: #e5ece9; --muted: #9aa8a2; --line: #2e3a36;
+    --hot: #f07a45; --cold: #6aa8e8; --accent: #4cc497; --scene: #1c2422; color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 24px 40px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
+  header { display: grid; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; }
+  header p { margin: 0; max-width: 68ch; color: var(--muted); }
+  .stage { position: relative; width: 100%; aspect-ratio: 16 / 10; max-height: 72vh; border-radius: 10px; overflow: hidden;
+           border: 1px solid var(--line); background: var(--scene); }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-family: var(--font-mono); font-size: 11.5px;
+         background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
+  .tag.hot { border-color: var(--hot); }
+  .tag.cold { border-color: var(--cold); }
+  .tag::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 8px; background: var(--muted); }
+  .hint { position: absolute; left: 10px; bottom: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); pointer-events: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: 500 14px var(--font-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+           border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+  .cols > section { min-width: 0; }
+  h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0 0 8px; }
+  ol.stack { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column-reverse; gap: 6px; }
+  ol.stack li { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  ol.stack .t { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  ol.stack .hot-l { color: var(--hot); }
+  ol.stack .cold-l { color: var(--cold); }
+  ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .note { font-size: 13px; color: var(--muted); margin: 0; }
+  @media (max-width: 560px) { .stage { aspect-ratio: 4 / 5; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">PY211IB physics lab · PBL</span>
+    <h1>Peltier generator bench setup</h1>
+    <p>Hot water heats the bottom of the module and ice water cools the top. The module drives a load resistor, and the Arduino reads ΔT from the two face sensors and V through the ADS1115. Drag to rotate, scroll or pinch to zoom.</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="labels" id="labels"></div>
+    <span class="hint">drag to rotate · scroll to zoom · right-drag to pan</span>
+  </div>
+
+  <div class="controls">
+    <button id="btnLabels" aria-pressed="true">Labels</button>
+    <button id="btnExplode" aria-pressed="false">Exploded stack</button>
+    <button id="btnClose">Close-up of stack</button>
+    <button id="btnReset">Reset view</button>
+  </div>
+
+  <div class="cols">
+    <section>
+      <h2>Stack, bottom to top</h2>
+      <ol class="stack">
+        <li><span class="t hot-l">~90 °C</span><span>Beaker of hot water (500 mL) with an aluminium block standing in it, top 1 cm above the rim</span></li>
+        <li><span class="t hot-l">hot</span><span>Aluminium plate 80×80×3 mm, hot DS18B20 taped at the corner, beside the module</span></li>
+        <li><span class="t">3.8 mm</span><span>TEC1-12706 module, 40×40 mm, thermal paste on both faces, red and black leads</span></li>
+        <li><span class="t cold-l">cold</span><span>Aluminium plate 60×60×3 mm, cold DS18B20 taped at the corner</span></li>
+        <li><span class="t cold-l">~2 °C</span><span>Steel cup of ice water, held lightly by the retort-stand clamp for even pressure</span></li>
+      </ol>
+    </section>
+    <section>
+      <h2>On the bench</h2>
+      <ul class="plain">
+        <li>Terminal block with the load resistor (1-100 Ω), close to the module</li>
+        <li>ADS1115 on the breadboard, A0 and A1 across the load</li>
+        <li>Arduino Uno with the 20×4 I2C LCD showing ΔT, V, I and P</li>
+        <li>Laptop over USB, logging CSV and plotting P vs R</li>
+      </ul>
+      <p class="note" style="margin-top:12px">Sizes are approximate. Keep the electronics well away from the hot water, and keep the leads to low-value loads short.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById('stage');
+  const labelLayer = document.getElementById('labels');
+  const css = () => getComputedStyle(document.documentElement);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.insertBefore(renderer.domElement, labelLayer);
+
+  const scene = new THREE.Scene();
+  const setSceneBg = () => { scene.background = new THREE.Color(css().getPropertyValue('--scene').trim() || '#e6ebe9'); };
+  setSceneBg();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setSceneBg);
+  new MutationObserver(setSceneBg).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 500);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.minDistance = 15;
+  controls.maxDistance = 160;
+  controls.maxPolarAngle = Math.PI * 0.49;
+
+  const HOME = { pos: new THREE.Vector3(8, 52, 88), target: new THREE.Vector3(8, 5, 0) };
+  const CLOSE = { pos: new THREE.Vector3(-4, 26, 36), target: new THREE.Vector3(-22, 12, 0) };
+  let camAnim = null;
+  function goTo(v, instant) {
+    if (instant || reduceMotion) { camera.position.copy(v.pos); controls.target.copy(v.target); controls.update(); return; }
+    camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), v, k: 0 };
+  }
+
+  // Lights
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f8c, 0.65));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(30, 60, 40);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 50, bottom: -50, near: 1, far: 160 });
+  scene.add(sun);
+
+  // Materials
+  const M = (color, opts = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.6, metalness: 0 }, opts));
+  const mat = {
+    table: M(0xb08a62, { roughness: 0.85 }),
+    alu: M(0xc4cacf, { metalness: 0.25, roughness: 0.4 }),
+    steel: M(0xb3b8bc, { metalness: 0.25, roughness: 0.35 }),
+    glass: new THREE.MeshPhysicalMaterial({ color: 0xdfeff5, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false }),
+    hotWater: new THREE.MeshStandardMaterial({ color: 0xe07a3c, transparent: true, opacity: 0.55, roughness: 0.2, depthWrite: false }),
+    coldWater: new THREE.MeshStandardMaterial({ color: 0x5a9bd8, transparent: true, opacity: 0.6, roughness: 0.2, depthWrite: false }),
+    ice: new THREE.MeshPhysicalMaterial({ color: 0xf2fbff, transparent: true, opacity: 0.8, roughness: 0.1 }),
+    ceramic: M(0xf4f1ea, { roughness: 0.5 }),
+    bite: M(0x6b6f72, { roughness: 0.7 }),
+    black: M(0x1b1d1f, { roughness: 0.5 }),
+    red: M(0xc62828, { roughness: 0.45 }),
+    wireBlack: M(0x222222, { roughness: 0.45 }),
+    yellow: M(0xe3b21f, { roughness: 0.45 }),
+    blue: M(0x2f6fd1, { roughness: 0.45 }),
+    green: M(0x2e9d55, { roughness: 0.45 }),
+    pcbTeal: M(0x0f7f86, { roughness: 0.55 }),
+    pcbPurple: M(0x5a3a9a, { roughness: 0.55 }),
+    pcbGreen: M(0x1d6e3a, { roughness: 0.55 }),
+    breadboard: M(0xf2f0ea, { roughness: 0.8 }),
+    termGreen: M(0x1f8a4c, { roughness: 0.6 }),
+    resistor: M(0xd8c39a, { roughness: 0.6 }),
+    rod: M(0x9da3a6, { metalness: 0.25, roughness: 0.4 }),
+    standBase: M(0x3b4246, { roughness: 0.6 }),
+    laptop: M(0x50575c, { metalness: 0.15, roughness: 0.5 }),
+    keys: M(0x2b2f33, { roughness: 0.7 }),
+  };
+
+  function box(w, h, d, m, x, y, z, parent) {
+    const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true;
+    (parent || scene).add(o); return o;
+  }
+  function cyl(r, h, m, x, y, z, parent, seg = 40, open = false) {
+    const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg, 1, open), m);
+    o.position.set(x, y, z); o.castShadow = !open; o.receiveShadow = true;
+    (parent || scene).add(o); return o;
+  }
+
+  // Table
+  const table = box(140, 2, 70, mat.table, 10, -1, 0);
+  table.castShadow = false;
+
+  // ---------- Thermal stack ----------
+  const X0 = -22, Z0 = 0;
+  // Beaker + hot water
+  const beaker = cyl(4.4, 11, mat.glass, X0, 5.5, Z0, null, 48, true);
+  beaker.renderOrder = 2;
+  cyl(4.4, 0.25, mat.glass, X0, 0.12, Z0);
+  const hw = cyl(4.25, 8.4, mat.hotWater, X0, 4.3, Z0, null, 48);
+  hw.castShadow = false; hw.renderOrder = 1;
+  // Aluminium block standing in the water
+  box(4.5, 11.8, 4.5, mat.alu, X0, 6.1, Z0);
+
+  // Layers that move in exploded view: group per layer with base y
+  const layers = [];
+  function layer(baseY, liftIdx) {
+    const g = new THREE.Group(); g.position.set(X0, baseY, Z0); scene.add(g);
+    layers.push({ g, baseY, lift: liftIdx }); return g;
+  }
+  const L_hot = layer(12.15, 0);
+  box(8, 0.3, 8, mat.alu, 0, 0, 0, L_hot);
+  const L_mod = layer(12.5, 1);
+  box(4, 0.08, 4, mat.ceramic, 0, -0.16, 0, L_mod);
+  box(4, 0.08, 4, mat.ceramic, 0, 0.16, 0, L_mod);
+  box(3.7, 0.24, 3.7, mat.bite, 0, 0, 0, L_mod);
+  // printed marking on top face
+  const markCanvas = document.createElement('canvas'); markCanvas.width = 256; markCanvas.height = 256;
+  const mc = markCanvas.getContext('2d'); mc.fillStyle = '#f4f1ea'; mc.fillRect(0, 0, 256, 256);
+  mc.fillStyle = '#333'; mc.font = 'bold 30px monospace'; mc.textAlign = 'center'; mc.fillText('TEC1-12706', 128, 136);
+  const mark = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(markCanvas), roughness: 0.5 }));
+  mark.rotation.x = -Math.PI / 2; mark.position.y = 0.205; L_mod.add(mark);
+  const L_cold = layer(12.86, 2);
+  box(6, 0.3, 6, mat.alu, 0, 0, 0, L_cold);
+  const L_cup = layer(13.01, 3);
+  const cupH = 6;
+  cyl(2.6, cupH, mat.steel, 0, cupH / 2, 0, L_cup, 40, true).material = mat.steel;
+  cyl(2.6, 0.15, mat.steel, 0, 0.07, 0, L_cup);
+  const cw = cyl(2.5, 4.8, mat.coldWater, 0, 2.6, 0, L_cup);
+  cw.castShadow = false;
+  [[-0.9, 4.6, 0.6], [0.8, 4.8, -0.5], [0.1, 4.5, 1.2], [-0.4, 4.9, -1.1], [1.2, 4.6, 0.9]].forEach(([x, y, z], i) => {
+    const c = box(1.1, 1.1, 1.1, mat.ice, x, y, z, L_cup); c.rotation.set(i * 0.5, i * 0.8, i * 0.3);
+  });
+
+  // DS18B20 sensors (TO-92 bodies) on the plates' corners
+  function sensor(parent, x, z, rotY) {
+    const g = new THREE.Group(); g.position.set(x, 0.42, z); g.rotation.y = rotY; parent.add(g);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.9, 20, 1, false, 0, Math.PI), mat.black);
+    body.rotation.z = Math.PI / 2; body.rotation.x = -Math.PI / 2; body.castShadow = true; g.add(body);
+    const tape = box(1.4, 0.04, 1.1, M(0xd99a2b, { roughness: 0.4, transparent: true, opacity: 0.75 }), 0.2, 0.05, 0, g);
+    tape.castShadow = false;
+    return g;
+  }
+  const sHot = sensor(L_hot, 3.2, 3.2, -Math.PI / 4);
+  const sCold = sensor(L_cold, 2.45, 2.45, -Math.PI / 4);
+
+  // Retort stand holding the cup lightly
+  box(10, 1, 14, mat.standBase, X0 - 13, 0.5, Z0 - 3);
+  cyl(0.45, 32, mat.rod, X0 - 15, 16, Z0 - 6);
+  const armY = 17.5;
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 15, 16), mat.rod);
+  arm.rotation.z = Math.PI / 2; arm.position.set(X0 - 7.5, armY, Z0 - 6); arm.castShadow = true; scene.add(arm);
+  const boss = box(1.6, 1.6, 1.6, mat.standBase, X0 - 15, armY, Z0 - 6);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.95, 0.25, 12, 48), mat.rod);
+  ring.rotation.x = Math.PI / 2; ring.castShadow = true; scene.add(ring);
+  const armLink = box(0.6, 0.6, 3.1, mat.rod, X0, armY, Z0 - 4.5);
+
+  // ---------- Electronics on the bench ----------
+  // Terminal block + load resistor
+  const TB = new THREE.Vector3(-6, 0, 7);
+  box(4, 1.4, 1.8, mat.termGreen, TB.x, 0.7, TB.z);
+  [-1.2, 1.2].forEach(dx => cyl(0.35, 0.2, mat.steel, TB.x + dx, 1.5, TB.z));
+  const res = new THREE.Group(); res.position.set(TB.x, 2.2, TB.z); scene.add(res);
+  const rb = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2, 24), mat.resistor); rb.rotation.z = Math.PI / 2; rb.castShadow = true; res.add(rb);
+  [[-0.6, 0xc62828], [-0.3, 0xc62828], [0, 0xd4af37], [0.6, 0xd4af37]].forEach(([dx, c]) => {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.14, 24), M(c)); b.rotation.z = Math.PI / 2; b.position.x = dx; res.add(b);
+  });
+  [-1, 1].forEach(s => { const leg = box(0.08, 0.8, 0.08, mat.steel, s * 1.2, -0.45, 0, res); leg.rotation.z = s * 0.35; });
+
+  // Breadboard + ADS1115
+  const BB = new THREE.Vector3(10, 0, 6);
+  box(16.5, 0.9, 5.5, mat.breadboard, BB.x, 0.45, BB.z);
+  box(16.5, 0.92, 0.25, M(0xd9d5cc), BB.x, 0.46, BB.z);
+  const ads = box(2.8, 0.16, 1.8, mat.pcbPurple, BB.x - 4, 1.35, BB.z + 0.2);
+  box(1.0, 0.2, 1.0, mat.black, BB.x - 4, 1.5, BB.z + 0.2);
+  box(2.6, 0.5, 0.25, mat.black, BB.x - 4, 1.05, BB.z + 1.0);
+  box(0.35, 0.3, 0.35, M(0x8a6a2a), BB.x + 2, 1.05, BB.z - 1.2); // 4.7k pull-up (simplified)
+
+  // Arduino Uno
+  const UNO = new THREE.Vector3(12, 0, -6);
+  box(6.9, 0.16, 5.3, mat.pcbTeal, UNO.x, 0.6, UNO.z);
+  [[-3.3, 0, 0.9, 1.1, 1.2], [-3.1, 0, -1.6, 1.4, 0.9]].forEach(([dx, , dz, w, h]) => box(w, h, w * 0.9, mat.steel, UNO.x + dx, 0.6 + h / 2, UNO.z + dz));
+  box(5.2, 0.85, 0.25, mat.black, UNO.x + 0.6, 1.1, UNO.z - 2.45);
+  box(4.4, 0.85, 0.25, mat.black, UNO.x + 0.9, 1.1, UNO.z + 2.45);
+  box(3.2, 0.4, 0.9, mat.black, UNO.x + 0.6, 0.85, UNO.z + 0.4);
+  [[-2.5, -1.8], [2.9, -2.3], [2.9, 2.3], [-2.5, 2.3]].forEach(([dx, dz]) => cyl(0.2, 0.6, mat.black, UNO.x + dx, 0.3, UNO.z + dz, null, 10));
+
+  // 20x4 LCD on a small stand, tilted back
+  const lcdG = new THREE.Group(); lcdG.position.set(26, 4.2, -9); lcdG.rotation.x = -0.32; scene.add(lcdG);
+  box(9.8, 6, 0.16, mat.pcbGreen, 0, 0, 0, lcdG);
+  box(9.7, 4.0, 0.9, mat.black, 0, 0.1, 0.5, lcdG);
+  const lcdCanvas = document.createElement('canvas'); lcdCanvas.width = 512; lcdCanvas.height = 180;
+  const lc = lcdCanvas.getContext('2d');
+  lc.fillStyle = '#1c4fd1'; lc.fillRect(0, 0, 512, 180);
+  lc.fillStyle = '#e8f0ff'; lc.font = 'bold 34px monospace';
+  ['Th 72.4C  Tc  8.9C', 'dT 63.5C  R= 2.20', 'V 1.3010V I 0.591A', 'P   769.4 mW'].forEach((t, i) => lc.fillText(t, 12, 38 + i * 42));
+  const lcdScreen = new THREE.Mesh(new THREE.PlaneGeometry(7.8, 2.7), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(lcdCanvas) }));
+  lcdScreen.position.set(0, 0.1, 0.96); lcdG.add(lcdScreen);
+  box(9.8, 0.4, 2.6, mat.standBase, 26, 0.2, -8.2);
+  const lcdLeg = box(0.5, 3.6, 0.5, mat.standBase, 26, 2.0, -9.6);
+
+  // Laptop
+  const lap = new THREE.Group(); lap.position.set(42, 0, 4); lap.rotation.y = -0.45; scene.add(lap);
+  box(30, 1.2, 21, mat.laptop, 0, 0.6, 0, lap);
+  box(26, 0.1, 9, mat.keys, 0, 1.25, -2.5, lap);
+  box(9, 0.08, 5.5, M(0x3d4448), 0, 1.24, 6.2, lap);
+  const lid = new THREE.Group(); lid.position.set(0, 1.2, -10.4); lid.rotation.x = -0.28; lap.add(lid);
+  box(30, 20, 0.7, mat.laptop, 0, 10, 0, lid);
+  const plotCanvas = document.createElement('canvas'); plotCanvas.width = 768; plotCanvas.height = 480;
+  (function drawPlot(c) {
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, 768, 480);
+    c.fillStyle = '#222'; c.font = 'bold 26px sans-serif'; c.fillText('Part B: power vs load', 40, 44);
+    const x0 = 80, y0 = 410, w = 640, h = 300;
+    c.strokeStyle = '#888'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, y0 - h - 10); c.lineTo(x0, y0); c.lineTo(x0 + w, y0); c.stroke();
+    const E = 1.83, Ri = 2.3, Rmin = 0.5, Rmax = 200, Pmax = E * E / (4 * Ri);
+    const X = R => x0 + (Math.log10(R) - Math.log10(Rmin)) / (Math.log10(Rmax) - Math.log10(Rmin)) * w;
+    const Y = P => y0 - P / (Pmax * 1.15) * h;
+    c.strokeStyle = '#1f7a5c'; c.lineWidth = 4; c.beginPath();
+    for (let i = 0; i <= 200; i++) { const R = Rmin * Math.pow(Rmax / Rmin, i / 200); const P = E * E * R / Math.pow(R + Ri, 2); i ? c.lineTo(X(R), Y(P)) : c.moveTo(X(R), Y(P)); }
+    c.stroke();
+    c.fillStyle = '#c8501e';
+    [1, 1.5, 2.2, 3.3, 4.7, 6.8, 10, 22, 47, 100].forEach(R => { const P = E * E * R / Math.pow(R + Ri, 2) * (1 + 0.03 * Math.sin(R * 7)); c.beginPath(); c.arc(X(R), Y(P), 8, 0, 7); c.fill(); });
+    c.setLineDash([8, 8]); c.strokeStyle = '#666'; c.lineWidth = 2; c.beginPath(); c.moveTo(X(Ri), y0); c.lineTo(X(Ri), Y(Pmax) - 20); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#444'; c.font = '22px sans-serif'; c.fillText('R = R_int', X(Ri) + 10, Y(Pmax) - 24);
+    c.fillText('R_L (ohm, log scale)', x0 + w - 230, y0 + 40); c.save(); c.translate(36, y0 - 80); c.rotate(-Math.PI / 2); c.fillText('P (mW)', 0, 0); c.restore();
+  })(plotCanvas.getContext('2d'));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(27, 17), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(plotCanvas) }));
+  screen.position.set(0, 10.2, 0.37); lid.add(screen);
+
+  // ---------- Wires (rebuilt when the stack moves) ----------
+  const wireMeshes = [];
+  function tube(points, m, r = 0.12) {
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, r, 8, false), m);
+    mesh.castShadow = true; scene.add(mesh); wireMeshes.push(mesh); return mesh;
+  }
+  function buildWires() {
+    wireMeshes.splice(0).forEach(w => { scene.remove(w); w.geometry.dispose(); });
+    const yM = L_mod.position.y, yH = L_hot.position.y + 0.42, yC = L_cold.position.y + 0.42;
+    // Module leads to terminal block
+    tube([[X0 + 2, yM, Z0 + 1.2], [X0 + 5, yM - 1, Z0 + 3], [X0 + 9, 3, Z0 + 6], [TB.x - 1.2, 1.7, TB.z]], mat.red);
+    tube([[X0 + 2, yM, Z0 + 0.4], [X0 + 5.5, yM - 1.5, Z0 + 2], [X0 + 10, 2.5, Z0 + 5], [TB.x + 1.2, 1.7, TB.z - 0.2]], mat.wireBlack);
+    // Terminal block to ADS1115 A0 / A1
+    tube([[TB.x - 1.2, 1.6, TB.z + 0.3], [TB.x + 2, 3, TB.z + 1], [BB.x - 8, 2.5, BB.z + 1.4], [BB.x - 5, 1.2, BB.z + 1.0]], mat.yellow, 0.09);
+    tube([[TB.x + 1.2, 1.6, TB.z + 0.3], [TB.x + 4, 2.6, TB.z + 1.2], [BB.x - 7, 2.2, BB.z + 1.7], [BB.x - 4.4, 1.2, BB.z + 1.0]], mat.green, 0.09);
+    // Sensor cables to breadboard
+    tube([[X0 + 3.6, yH, Z0 + 3.6], [X0 + 6, yH - 2, Z0 + 8], [X0 + 14, 3, Z0 + 11], [BB.x + 1, 2.5, BB.z + 3.5], [BB.x + 2, 1.0, BB.z - 1.0]], mat.black, 0.14);
+    tube([[X0 + 2.85, yC, Z0 + 2.85], [X0 + 6, yC + 0.5, Z0 + 7], [X0 + 15, 4, Z0 + 12], [BB.x + 2.5, 2.8, BB.z + 3.8], [BB.x + 2.6, 1.0, BB.z - 1.0]], mat.black, 0.14);
+    // I2C + power from breadboard to Arduino and LCD
+    tube([[BB.x - 4, 1.4, BB.z - 0.5], [BB.x - 2, 2.5, BB.z - 5], [UNO.x + 3, 1.4, UNO.z + 2.4]], mat.blue, 0.08);
+    tube([[BB.x - 3.4, 1.4, BB.z - 0.5], [BB.x - 1, 2.8, BB.z - 5.5], [UNO.x + 2.4, 1.4, UNO.z + 2.4]], mat.yellow, 0.08);
+    tube([[UNO.x + 3.3, 1.4, UNO.z - 2.4], [UNO.x + 8, 3, UNO.z - 4], [26, 3.2, -9.2]], mat.blue, 0.08);
+    // USB to laptop
+    tube([[UNO.x - 3.6, 1.0, UNO.z - 1.6], [UNO.x - 6, 1.0, UNO.z - 10], [30, 0.4, -16], [lap.position.x - 13, 0.8, lap.position.z - 4]], M(0x9aa0a4), 0.2);
+  }
+
+  // ---------- Exploded view ----------
+  let explode = 0, explodeTarget = 0;
+  function applyExplode() {
+    layers.forEach(l => { l.g.position.y = l.baseY + explode * (l.lift + 1) * 2.2; });
+    ring.position.set(X0, L_cup.position.y + 3.6, Z0);
+    armLink.position.y = ring.position.y;
+    arm.position.y = ring.position.y; boss.position.y = ring.position.y;
+    buildWires();
+  }
+  applyExplode();
+
+  // ---------- Labels ----------
+  const tmp = new THREE.Vector3();
+  const STACK = new THREE.Vector3(X0, 12, Z0);
+  const tags = [
+    { text: 'Hot water ~90 °C', cls: 'hot', at: () => tmp.set(X0 - 4.6, 5, Z0 + 1) },
+    { far: true, text: 'Peltier stack', cls: '', at: () => tmp.set(X0 + 4, 13, Z0 + 4) },
+    { near: true, text: 'Aluminium block', cls: '', at: () => tmp.set(X0 - 2.3, 9.6, Z0 + 2.3) },
+    { near: true, text: 'Hot plate + DS18B20', cls: 'hot', at: () => sHot.getWorldPosition(tmp).add(new THREE.Vector3(0, 0.5, 0)) },
+    { near: true, text: 'TEC1-12706', cls: '', at: () => L_mod.getWorldPosition(tmp).add(new THREE.Vector3(-4.2, 0.3, -1.5)) },
+    { near: true, text: 'Cold plate + DS18B20', cls: 'cold', at: () => sCold.getWorldPosition(tmp).add(new THREE.Vector3(0, 0.5, 0)) },
+    { text: 'Ice water ~2 °C', cls: 'cold', at: () => L_cup.getWorldPosition(tmp).add(new THREE.Vector3(0, 6.3, 0)) },
+    { text: 'Clamp (light pressure)', cls: '', at: () => tmp.set(X0 - 15, 32.5, Z0 - 6) },
+    { text: 'Load resistor', cls: '', at: () => tmp.set(TB.x, 2.9, TB.z) },
+    { text: 'ADS1115', cls: '', at: () => tmp.set(BB.x - 4, 1.8, BB.z + 0.2) },
+    { text: 'Breadboard', cls: '', at: () => tmp.set(BB.x + 5, 1.0, BB.z + 1.5) },
+    { text: 'Arduino Uno', cls: '', at: () => tmp.set(UNO.x, 1.6, UNO.z) },
+    { text: '20×4 LCD', cls: '', at: () => tmp.set(26, 7.6, -9.8) },
+    { text: 'Laptop: logging + plots', cls: '', at: () => lap.localToWorld(tmp.set(0, 21, -12)) },
+  ];
+  tags.forEach(t => { t.el = document.createElement('div'); t.el.className = 'tag ' + t.cls; t.el.textContent = t.text; labelLayer.appendChild(t.el); });
+  let showLabels = true;
+  function placeLabels() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    tags.forEach(t => {
+      const close = camera.position.distanceTo(STACK) < 55;
+      if (!showLabels || (t.near && !close) || (t.far && close)) { t.el.hidden = true; return; }
+      const p = t.at().clone();
+      const dist = camera.position.distanceTo(p);
+      p.project(camera);
+      const visible = p.z < 1 && Math.abs(p.x) < 1.05 && Math.abs(p.y) < 1.05;
+      t.el.hidden = !visible;
+      if (visible) {
+        t.el.style.left = ((p.x + 1) / 2 * w) + 'px';
+        t.el.style.top = ((1 - p.y) / 2 * h - 8) + 'px';
+        t.el.style.zIndex = String(1000 - Math.round(dist));
+      }
+    });
+  }
+
+  // ---------- Controls ----------
+  const btnLabels = document.getElementById('btnLabels');
+  const btnExplode = document.getElementById('btnExplode');
+  btnLabels.addEventListener('click', () => { showLabels = !showLabels; btnLabels.setAttribute('aria-pressed', String(showLabels)); });
+  btnExplode.addEventListener('click', () => {
+    explodeTarget = explodeTarget ? 0 : 1; btnExplode.setAttribute('aria-pressed', String(!!explodeTarget));
+    if (reduceMotion) { explode = explodeTarget; applyExplode(); }
+  });
+  document.getElementById('btnClose').addEventListener('click', () => goTo(CLOSE));
+  document.getElementById('btnReset').addEventListener('click', () => goTo(HOME));
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.fov = w < 560 ? 52 : 38;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage);
+  resize();
+  goTo(HOME, true);
+
+  function tick() {
+    if (Math.abs(explode - explodeTarget) > 0.001) {
+      explode += (explodeTarget - explode) * 0.12;
+      if (Math.abs(explode - explodeTarget) < 0.002) explode = explodeTarget;
+      applyExplode();
+    }
+    if (camAnim) {
+      camAnim.k = Math.min(1, camAnim.k + 0.04);
+      const e = 1 - Math.pow(1 - camAnim.k, 3);
+      camera.position.lerpVectors(camAnim.p0, camAnim.v.pos, e);
+      controls.target.lerpVectors(camAnim.t0, camAnim.v.target, e);
+      if (camAnim.k >= 1) camAnim = null;
+    }
+    controls.update();
+    renderer.render(scene, camera);
+    placeLabels();
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+</script>

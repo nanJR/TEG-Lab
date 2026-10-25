@@ -1,0 +1,46 @@
+TEG characterisation results
+============================================================
+NOTE: these numbers come from SIMULATED demo data, not a measurement.
+
+Part A: Seebeck coefficient (open circuit)
+  points used            1500
+  S_module               41.99 ± 0.00 mV/°C   (R² = 1.0000)
+  intercept              0.22 mV   (should be near 0; offset = sensor/ADC error)
+  S per couple (N=127)   331 µV/°C   (Bi2Te3 p-n couple ~ 400 µV/K)
+
+Part B: load sweep at ΔT_ref = 43.46 °C (V normalised to ΔT_ref)
+     R (Ω)    V (V)     I (A)     P (mW)   ±dP     ΔT (°C)
+    100.40   1.7846    0.0178     31.72   0.36    44.66
+     47.10   1.7397    0.0369     64.26   0.77    44.46
+     22.30   1.6542    0.0742    122.71   1.60    44.20
+     10.10   1.4858    0.1471    218.57   3.42    43.89
+      6.75   1.3609    0.2016    274.37   4.95    43.61
+      4.68   1.2248    0.2617    320.54   6.81    43.35
+      3.31   1.0768    0.3253    350.29   8.96    43.08
+      2.21   0.8942    0.4046    361.79  11.95    42.74
+      1.52   0.7269    0.4782    347.61  15.03    42.45
+      1.02   0.5606    0.5496    308.11  18.27    42.17
+  V-I line:   E = 1.8249 ± 0.0005 V,  R_int = 2.299 ± 0.002 Ω   (R² = 1.0000)
+  Free fit:   E = 1.8249 ± 0.0071 V,  R_int = 2.299 ± 0.042 Ω
+  P_max (fit) = 362.1 mW at R = R_int;  largest measured P = 361.8 mW at R = 2.21 Ω
+  S from E/ΔT = 41.99 mV/°C (compare with Part A)
+
+Model vs measurement (zero fitted parameters)
+  E predicted = S × ΔT = 1.8250 V vs 1.8249 V from V-I line (-0.0%)
+  RMS deviation of measured P from predicted P = 0.1%
+  worst point: +0.2% at R = 4.68 Ω
+
+Part C: P_max vs ΔT
+  ΔT =  57.01 °C   P =   622.91 mW   P/ΔT² = 191.6 µW/°C²
+  ΔT =  47.78 °C   P =   437.35 mW   P/ΔT² = 191.6 µW/°C²
+  ΔT =  38.56 °C   P =   284.88 mW   P/ΔT² = 191.6 µW/°C²
+  ΔT =  29.31 °C   P =   163.86 mW   P/ΔT² = 190.7 µW/°C²
+  ΔT =  20.10 °C   P =    77.48 mW   P/ΔT² = 191.7 µW/°C²
+  log-log slope = 2.000 ± 0.001   (theory: 2)
+
+Efficiency at matched load (ΔT = 43.5 °C)
+  Z = 2.45 ×10⁻³ /K  (ZT ≈ 0.74),  K = 0.313 W/K  [datasheet ΔT_max = 66.0 °C]
+  I = 0.397 A,  P = 362.2 mW,  Q_h (model) = 18.86 W
+  η estimate = P / Q_h = 1.92%
+  (with K taken from the datasheet Z this equals the ideal limit; pass --K or use calorimetry for an independent Q_h)
+  η Carnot = 13.3%,  ideal TEG at max power = 1.92%,  ideal TEG max efficiency = 1.96%
